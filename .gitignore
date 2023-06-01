@@ -48,3 +48,8 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+
+
+# Added by cargo
+
+/target
