@@ -14,6 +14,9 @@ void   ggml_cuda_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
 // TODO: export these with GGML_API
 void * ggml_cuda_host_malloc(size_t size);
 void   ggml_cuda_host_free(void * ptr);
+//extra
+void ggml_cuda_device_synchronize(void);
+void ggml_cuda_free(void* ptr);
 
 void ggml_cuda_transform_tensor(struct ggml_tensor * tensor);
 void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensors, size_t offset);

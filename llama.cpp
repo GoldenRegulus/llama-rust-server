@@ -207,6 +207,10 @@ struct llama_vocab {
 };
 
 struct llama_context {
+    //extra
+    int n_gpu = 0;
+    int n_gpu_output = 0;
+
     std::mt19937 rng;
 
     int64_t t_load_us = 0;
@@ -920,7 +924,6 @@ static void llama_model_load_internal(
         void * progress_callback_user_data) {
 
     lctx.t_start_us = ggml_time_us();
-
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap, vocab_only));
 
     lctx.vocab = std::move(ml->file_loaders.at(0)->vocab);
@@ -1088,9 +1091,12 @@ static void llama_model_load_internal(
 
 #ifdef GGML_USE_CUBLAS
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
-
+        //extra
+        lctx.n_gpu = n_gpu;
         fprintf(stderr, "%s: [cublas] offloading %d layers to GPU\n", __func__, n_gpu);
         if (n_gpu_layers > (int) hparams.n_layer) {
+            //extra
+            lctx.n_gpu_output = 1;
             fprintf(stderr, "%s: [cublas] offloading output layer to GPU\n", __func__);
         }
         fprintf(stderr, "%s: [cublas] total VRAM used: %zu MB\n", __func__, vram_total / 1024 / 1024);
@@ -1130,7 +1136,8 @@ static void llama_model_load_internal(
 #elif defined(GGML_USE_CLBLAST)
     {
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
-
+        //extra
+        lctx.n_gpu = n_gpu;
         fprintf(stderr, "ggml_opencl: offloading %d layers to GPU\n", n_gpu);
 
         size_t vram_total = 0;
@@ -1147,6 +1154,7 @@ static void llama_model_load_internal(
             ggml_cl_transform_tensor(layer.w3); vram_total += ggml_nbytes(layer.w3);
         }
         if (n_gpu_layers > (int) hparams.n_layer) {
+            lctx.n_gpu_output = 1;
             fprintf(stderr, "ggml_opencl: offloading output layer to GPU\n");
             ggml_cl_transform_tensor(model.output); vram_total += ggml_nbytes(model.output);
         }
@@ -2217,7 +2225,7 @@ struct llama_context * llama_init_from_file(
     ggml_time_init();
 
     llama_context * ctx = new llama_context;
-
+    
     if (params.seed < 0) {
         params.seed = time(NULL);
     }
@@ -2288,6 +2296,26 @@ struct llama_context * llama_init_from_file(
 }
 
 void llama_free(struct llama_context * ctx) {
+    // https://github.com/edp1096/my-llama/
+#ifdef GGML_USE_CUBLAS
+    int n_gpu = ctx->n_gpu;
+
+    ggml_cuda_device_synchronize();
+
+    for (int i = 0; i < n_gpu; ++i) {
+        ggml_cuda_free(ctx->model.layers[i].wq->data);
+        ggml_cuda_free(ctx->model.layers[i].wk->data);
+        ggml_cuda_free(ctx->model.layers[i].wv->data);
+        ggml_cuda_free(ctx->model.layers[i].wo->data);
+        ggml_cuda_free(ctx->model.layers[i].w1->data);
+        ggml_cuda_free(ctx->model.layers[i].w2->data);
+        ggml_cuda_free(ctx->model.layers[i].w3->data);
+    }
+
+    if (ctx->n_gpu_output > 0) {
+        ggml_cuda_free(ctx->model.output->data);
+    }
+#endif
     delete ctx;
 }
 

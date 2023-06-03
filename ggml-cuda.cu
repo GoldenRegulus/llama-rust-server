@@ -438,6 +438,13 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
     CUDA_CHECK(cudaFree(ptr));
 }
 
+//extra
+void ggml_cuda_free(void *ptr) {
+    if (ptr != nullptr) {
+        CUDA_CHECK(cudaFree(ptr));
+    }
+}
+
 #define GGML_CUDA_MAX_STREAMS 8 // Set this to 1 for reproducible matrix multiplication.
 #define GGML_CUDA_MAX_EVENTS 64
 static cublasHandle_t g_cublasH = nullptr;
@@ -954,4 +961,9 @@ void ggml_cuda_load_data(const char * fname, struct ggml_tensor * tensor, const 
     tensor->data = buf;
     free(buf_host);
     fclose(fp);
+}
+
+//extra
+void ggml_cuda_device_synchronize() {
+    CUDA_CHECK(cudaDeviceSynchronize());
 }
